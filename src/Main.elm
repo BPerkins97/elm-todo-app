@@ -1,69 +1,122 @@
 module Main exposing (..)
 
 import Browser
-import Html exposing (Html, table, tr, td, tbody, thead, text, button, input, div, br, caption)
-import Html.Attributes exposing (type_, value)
-import Html.Events exposing (onClick, onInput)
+import Element exposing (table, text, layout, fill, el, column)
+import Element.Input as Input
+import Html exposing (Html)
+import Element.Input as Input
 import List exposing (..)
+import Time
 
-main = Browser.sandbox { init = init, update = update, view = view }
+main = Browser.element { init = init, update = update, view = view, subscriptions = subscriptions}
 
 type alias Model = {
         toDos: List ToDo,
-        toDoThatIsCurrentlyWritten: String
+        currentlyWrittenToDo: ToDo
     }
 type alias ToDo = {
-        name: String
+        name: String,
+        dueDate: Maybe String
     }
 
-type Msg = WritingToDo String | AddedToDo
+type Msg = WritingToDo String | AddedToDo | WritingDate String
 
-init : Model
-init = {
-        toDos = [],
-        toDoThatIsCurrentlyWritten = ""
-    }
+init : () -> (Model, Cmd Msg)
+init _ = (
+        {
+            toDos = [],
+            currentlyWrittenToDo = {
+                name = "",
+                dueDate = Nothing
+            }
+        },
+        Cmd.none
+    )
 
-update : Msg -> Model -> Model 
+subscriptions : Model -> Sub Msg
+subscriptions model = Sub.none
+
+update : Msg -> Model -> (Model, Cmd Msg) 
 update msg model =
   case msg of
     WritingToDo str ->
-      { model | toDoThatIsCurrentlyWritten = str }
+      ({ model | currentlyWrittenToDo = {
+          name = str,
+          dueDate = model.currentlyWrittenToDo.dueDate
+      } }, Cmd.none)
     AddedToDo ->
         let 
-            newModel = { model | toDos = {name = model.toDoThatIsCurrentlyWritten} :: model.toDos }
+            newModel = { model | toDos = {name = model.currentlyWrittenToDo.name, dueDate = model.currentlyWrittenToDo.dueDate} :: model.toDos }
         in
-            { newModel | toDoThatIsCurrentlyWritten = "" }
+            (
+                { newModel | currentlyWrittenToDo = {name = "", dueDate = Nothing} },
+                Cmd.none
+            )
+    WritingDate str ->
+        ({ model | currentlyWrittenToDo = {
+            name = model.currentlyWrittenToDo.name,
+            dueDate = Just str
+        } }, Cmd.none)
     
 
 view : Model -> Html Msg
-view model =
-  
-  div [] [
-      table [] [
-        caption [] [
-            text "ToDos"
-        ],
-        thead [] [
-            td [] [
-                text "ToDo"
-            ]
-        ],
-        tbody [] (List.map viewToDoAsRow model.toDos)
-    ],
-    div [] [
-        input [type_ "text", onInput WritingToDo, value model.toDoThatIsCurrentlyWritten] [],
-        br [] [],
-        button [onClick AddedToDo] [
-            text "Hinzufügen"
-        ] 
-    ]
-  ]
+view model = 
+  layout [] (
+      column [] [
+        el [] (
+            table [] {
+                data = model.toDos,
+                columns = [
+                    {
+                        header = text "ToDo",
+                        width = fill,
+                        view = \toDo -> text toDo.name
+                    },
+                    {
+                        header = text "Fällig um",
+                        width = fill,
+                        view = \toDo -> text (viewMaybeDate toDo.dueDate)
+                    }
+                ]
+            }
+        ),
+        el [] (
+            Input.text [] {
+                onChange = WritingToDo,
+                text = model.currentlyWrittenToDo.name,
+                placeholder = Nothing,
+                label = (
+                    Input.labelLeft [] (
+                        text "Neues ToDo"
+                    )
+                )
+            }
+        ),
+        el [] (
+            Input.text [] {
+                onChange = WritingDate,
+                text = (viewMaybeDate model.currentlyWrittenToDo.dueDate),
+                placeholder = Nothing,
+                label = (
+                    Input.labelLeft [] (
+                        text "Fällig am"
+                    )
+                )
+            }
+        ),
+        Input.button [] {
+            onPress = Just AddedToDo,
+            label = (
+                text "Hinzufügen"
+            )
+        }
+      ]
+    )
 
-viewToDoAsRow : ToDo -> Html Msg
-viewToDoAsRow toDo = 
-    tr [] [
-        td [] [
-            text toDo.name
-        ]
-    ]
+viewMaybeDate : Maybe String -> String
+viewMaybeDate maybe = 
+    case maybe of
+        Just date ->
+            date
+        Nothing -> 
+            ""
